@@ -1,6 +1,9 @@
 """Fetch web pages for automations, including paywalled ones, safely."""
 
+from .syndication import republished
 from .routes import ROUTES, FetchFailed, Fetched
 
-__all__ = ["ROUTES", "FetchFailed", "Fetched"]
-__version__ = "0.1.0"
+ROUTES["republished"] = republished
+
+__all__ = ["ROUTES", "FetchFailed", "Fetched", "republished"]
+__version__ = "0.2.0"
