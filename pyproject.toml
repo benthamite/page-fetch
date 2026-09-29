@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "page-fetch"
+version = "0.1.0"
+description = "Fetch web pages for automations, with paywall routes and an SSRF guard"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27", "httpcore>=1.0"]
+
+[project.optional-dependencies]
+impersonate = ["curl_cffi>=0.7"]
+
+[tool.setuptools]
+packages = ["page_fetch"]
