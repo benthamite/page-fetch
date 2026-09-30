@@ -113,3 +113,34 @@ class FetchFallbackTests(unittest.TestCase):
         )
 
         self.assertIsNone(pf_text.usable_page_text(text))
+
+
+class ArchiveTodayHostTests(unittest.TestCase):
+    def _run(self, pages):
+        import httpx
+
+        def handler(request):
+            body = pages.get(request.url.host)
+            if body is None:
+                return httpx.Response(503)
+            return httpx.Response(200, headers={"content-type": "text/html"}, text=body)
+
+        def fake_client(**kwargs):
+            kwargs.pop("follow_redirects", None)
+            return httpx.Client(transport=httpx.MockTransport(handler),
+                                follow_redirects=False, **kwargs)
+
+        with mock.patch.object(routes, "safe_client", fake_client), \
+                mock.patch.object(netguard, "resolve_public", return_value=["93.184.216.34"]):
+            return routes.archive_today("https://www.example.com/a/story")
+
+    def test_walled_first_host_falls_through_to_next(self):
+        wall = ("archive.ph One more step Please complete the security check "
+                "to access archive.ph Why do I have to complete a CAPTCHA?")
+        page = self._run({"archive.ph": wall, "archive.is": "<p>The full article text.</p>"})
+        self.assertIn("archive.is", page.source_url)
+
+    def test_all_hosts_failing_lists_each_reason(self):
+        with self.assertRaisesRegex(routes.FetchFailed,
+                                    "archive.ph: HTTP 503; archive.is: HTTP 503"):
+            self._run({})

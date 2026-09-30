@@ -200,8 +200,11 @@ def archive_today(url: str, *, timeout: float = DEFAULT_TIMEOUT,
             continue
         fetched = Fetched(url=url, source_url=str(resp.url),
                           route="archive.today", html=resp.text)
+        # A 200 carrying a CAPTCHA or other wall is archive.today's commonest
+        # failure, and another host may still serve the snapshot.
         if not _long_enough(fetched, min_text_len):
-            raise FetchFailed(f"archive.today ({host}): no usable snapshot text")
+            failures.append(f"{host}: no usable snapshot text")
+            continue
         return fetched
     raise FetchFailed("archive.today: " + "; ".join(failures))
 

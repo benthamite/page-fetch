@@ -47,7 +47,7 @@ else:
 Install a pinned version:
 
 ```
-page-fetch[impersonate] @ git+https://github.com/benthamite/page-fetch@v0.1.0
+page-fetch[impersonate] @ git+https://github.com/benthamite/page-fetch@<commit SHA>  # pin a full commit, not a tag
 ```
 
 Tests: `python -m unittest discover -s tests`.
