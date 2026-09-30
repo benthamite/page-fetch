@@ -1,5 +1,6 @@
 import unittest
 from unittest import mock
+from urllib.parse import quote
 
 import httpx
 
@@ -27,6 +28,8 @@ def _client_for(pages):
         body = pages.get(str(request.url))
         if body is None:
             return httpx.Response(404)
+        if isinstance(body, httpx.Response):
+            return body
         return httpx.Response(200, headers={"content-type": "text/html"}, text=body)
 
     def fake_client(**kwargs):
@@ -88,6 +91,34 @@ class RepublishedTests(unittest.TestCase):
         pages = {"https://www.adn.com/arc/outboundfeeds/sitemap/": SITEMAP, self.COPY: ARTICLE}
         with self.assertRaisesRegex(FetchFailed, "no matching copy"):
             self._run(pages, title="Navy admiral fired over carrier dispute")
+
+    def test_rejects_copy_listed_off_the_partner_domain(self):
+        offsite = self.COPY.replace("www.adn.com", "adn.com.example.net")
+        pages = {"https://www.adn.com/arc/outboundfeeds/sitemap/": SITEMAP.replace(self.COPY, offsite),
+                 offsite: ARTICLE}
+        with self.assertRaisesRegex(FetchFailed, "no matching copy"):
+            self._run(pages, title=self.TITLE)
+
+    def test_rejects_copy_that_redirects_off_the_partner_domain(self):
+        elsewhere = "https://example.net/copy"
+        pages = {"https://www.adn.com/arc/outboundfeeds/sitemap/": SITEMAP,
+                 self.COPY: httpx.Response(302, headers={"location": elsewhere}),
+                 elsewhere: ARTICLE}
+        with self.assertRaisesRegex(FetchFailed, "no matching copy"):
+            self._run(pages, title=self.TITLE)
+
+    def test_yahoo_search_keeps_only_yahoo_hosts(self):
+        def result(link):
+            return f'<a href="https://r.search.yahoo.com/_ylt=x/RU={quote(link, safe="")}/RK=2/RS=y">'
+        real = "https://finance.yahoo.com/news/articles/fed-cuts-rates-123.html"
+        html = "".join(result(link) for link in (
+            "https://evilyahoo.com/news/articles/fed-cuts-rates.html",
+            "https://finance.yahoo.com.example.net/articles/fed-cuts-rates.html",
+            real))
+        pages = {"https://news.search.yahoo.com/search?p=fed+cuts+rates": html}
+        with mock.patch.object(netguard, "resolve_public", return_value=["93.184.216.34"]), \
+                _client_for(pages)() as client:
+            self.assertEqual(rp.yahoo_news_finder(client, "fed cuts rates"), [(real, None)])
 
     def test_unknown_site_and_missing_headline(self):
         with self.assertRaisesRegex(FetchFailed, "no known free republisher"):

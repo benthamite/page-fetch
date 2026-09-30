@@ -106,11 +106,21 @@ def _slug_headline(url: str, headline: str | None) -> str | None:
     return headline or title_from_url(url)
 
 
-def _get_text(client: httpx.Client, url: str) -> str:
+def _on_domain(url: str, domain: str) -> bool:
+    """True when ``url``'s host is ``domain`` or one of its subdomains."""
+    host = (urlparse(url).hostname or "").lower()
+    return host == domain or host.endswith("." + domain)
+
+
+def _get(client: httpx.Client, url: str) -> httpx.Response:
     resp = safe_get(client, url)
     if resp.status_code != 200:
         raise FetchFailed(f"{url}: HTTP {resp.status_code}")
-    return resp.text
+    return resp
+
+
+def _get_text(client: httpx.Client, url: str) -> str:
+    return _get(client, url).text
 
 
 def feed_finder(*feed_urls: str, path_filter: str | None = None):
@@ -141,7 +151,7 @@ def yahoo_news_finder(client: httpx.Client, wanted: str) -> list[Candidate]:
     for encoded in re.findall(r"/RU=([^/]+)/R[KS]=", html):
         link = unquote(encoded).split("?")[0]
         host = urlparse(link).hostname or ""
-        if host.endswith("yahoo.com") and "/articles/" in link and link not in links:
+        if _on_domain(link, "yahoo.com") and "/articles/" in link and link not in links:
             links.append(link)
     return [(link, None) for link in links[:MAX_CANDIDATES]]
 
@@ -152,6 +162,7 @@ def yahoo_news_finder(client: httpx.Client, wanted: str) -> list[Candidate]:
 @dataclass(frozen=True)
 class Venue:
     name: str
+    domain: str  # the copy must be served from here or a subdomain
     find: Callable[[httpx.Client, str], list[Candidate]]
     credit: re.Pattern  # must appear in the copy's HTML
 
@@ -161,33 +172,32 @@ _MINT_SITEMAPS = ("https://www.livemint.com/sitemap/today.xml",
 
 VENUES: dict[str, list[Venue]] = {
     "bloomberg.com": [
-        Venue("Yahoo Finance", yahoo_news_finder, re.compile(r"\(Bloomberg\)|Bloomberg L\.P\.")),
+        Venue("Yahoo Finance", "yahoo.com", yahoo_news_finder, re.compile(r"\(Bloomberg\)|Bloomberg L\.P\.")),
     ],
     "wsj.com": [
-        Venue("Yahoo Finance", yahoo_news_finder, re.compile(r"Wall Street Journal|Dow Jones")),
-        Venue("Mint", feed_finder(*_MINT_SITEMAPS), re.compile(r"Wall Street Journal|\bWSJ\b")),
+        Venue("Yahoo Finance", "yahoo.com", yahoo_news_finder, re.compile(r"Wall Street Journal|Dow Jones")),
+        Venue("Mint", "livemint.com", feed_finder(*_MINT_SITEMAPS), re.compile(r"Wall Street Journal|\bWSJ\b")),
     ],
     "washingtonpost.com": [
-        Venue("Anchorage Daily News",
+        Venue("Anchorage Daily News", "adn.com",
               feed_finder("https://www.adn.com/arc/outboundfeeds/sitemap/"),
               re.compile(r"The Washington Post")),
     ],
     "ft.com": [
-        Venue("The Irish Times",
+        Venue("The Irish Times", "irishtimes.com",
               feed_finder("https://www.irishtimes.com/arc/outboundfeeds/sitemap-news-index/latest/"),
               re.compile(r"Financial Times Limited|The Financial Times")),
     ],
     "economist.com": [
-        Venue("Mint", feed_finder(*_MINT_SITEMAPS, path_filter=r"/global/"),
+        Venue("Mint", "livemint.com", feed_finder(*_MINT_SITEMAPS, path_filter=r"/global/"),
               re.compile(r"The Economist")),
     ],
 }
 
 
 def _outlet(url: str) -> str | None:
-    host = (urlparse(url).hostname or "").lower()
     for outlet in VENUES:
-        if host == outlet or host.endswith("." + outlet):
+        if _on_domain(url, outlet):
             return outlet
     return None
 
@@ -216,10 +226,18 @@ def republished(url: str, *, title: str | None = None,
                 tried.append(f"{venue.name}: search failed ({e})")
                 continue
             for link, listed in candidates:
+                # Candidate links come from search results and sitemaps, and
+                # a partner page can redirect anywhere; only a copy the
+                # partner itself serves is one it licensed.
+                if not _on_domain(link, venue.domain):
+                    continue
                 try:
-                    html = _get_text(client, link)
+                    resp = _get(client, link)
                 except (FetchFailed, httpx.HTTPError):
                     continue
+                if not _on_domain(str(resp.url), venue.domain):
+                    continue
+                html = resp.text
                 shown = _strip_site_suffix(page_title(html) or "")
                 score = max(title_score(wanted, shown),
                             title_score(wanted, listed) if listed else 0.0)

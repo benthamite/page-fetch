@@ -6,4 +6,4 @@ from .routes import ROUTES, FetchFailed, Fetched
 ROUTES["republished"] = republished
 
 __all__ = ["ROUTES", "FetchFailed", "Fetched", "republished"]
-__version__ = "0.2.1"
+__version__ = "0.2.2"

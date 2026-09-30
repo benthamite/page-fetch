@@ -28,7 +28,7 @@ Several paywalled outlets license full articles to partners that publish them fr
 | FT | The Irish Times | Irish Times news feed |
 | The Economist | Mint | Mint's daily sitemaps |
 
-A copy counts only if its headline matches and its page credits the outlet. Without `title`, the headline is guessed from the URL slug, which does not work for FT links. Partners carry only some stories and sometimes rewrite headlines, so a miss does not prove there is no copy. The partner listings cover roughly the last two days. These sites answer from cloud IPs where the outlets' own sites refuse (tested from GitHub Actions, September 2026).
+A copy counts only if it is served from the partner's own domain (after redirects), its headline matches, and its page credits the outlet. Without `title`, the headline is guessed from the URL slug, which does not work for FT links. Partners carry only some stories and sometimes rewrite headlines, so a miss does not prove there is no copy. The partner listings cover roughly the last two days. These sites answer from cloud IPs where the outlets' own sites refuse (tested from GitHub Actions, September 2026).
 
 All requests go through `page_fetch.netguard`, which refuses non-public addresses, including on redirects and against DNS rebinding.
 
