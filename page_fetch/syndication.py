@@ -175,7 +175,11 @@ VENUES: dict[str, list[Venue]] = {
         Venue("Yahoo Finance", "yahoo.com", yahoo_news_finder, re.compile(r"\(Bloomberg\)|Bloomberg L\.P\.")),
     ],
     "wsj.com": [
-        Venue("Yahoo Finance", "yahoo.com", yahoo_news_finder, re.compile(r"Wall Street Journal|Dow Jones")),
+        # Not the article text: every Yahoo Finance page names "Dow Jones" in
+        # its market ticker, and many carry other outlets' stories that cite
+        # the Journal. The page's schema.org provider names the real source.
+        Venue("Yahoo Finance", "yahoo.com", yahoo_news_finder,
+              re.compile(r'"provider":\{[^{}]*"name":"The Wall Street Journal"')),
         Venue("Mint", "livemint.com", feed_finder(*_MINT_SITEMAPS), re.compile(r"Wall Street Journal|\bWSJ\b")),
     ],
     "washingtonpost.com": [

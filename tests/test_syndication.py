@@ -120,6 +120,16 @@ class RepublishedTests(unittest.TestCase):
                 _client_for(pages)() as client:
             self.assertEqual(rp.yahoo_news_finder(client, "fed cuts rates"), [(real, None)])
 
+    def test_wsj_credit_on_yahoo_needs_the_journal_as_provider(self):
+        credit = rp.VENUES["wsj.com"][0].credit
+        # Every Yahoo Finance page has "Dow Jones" in its ticker, and other
+        # outlets' stories cite the Journal in their text.
+        other = ('<a href="/quote/%5EDJI/">Dow Jones</a><p>The Wall Street Journal reported</p>'
+                 '<script>{"provider":{"@type":"Organization","name":"Moneywise"}}</script>')
+        wsj = '<script>{"provider":{"@type":"Organization","name":"The Wall Street Journal","url":"http://www.wsj.com/"}}</script>'
+        self.assertIsNone(credit.search(other))
+        self.assertIsNotNone(credit.search(wsj))
+
     def test_unknown_site_and_missing_headline(self):
         with self.assertRaisesRegex(FetchFailed, "no known free republisher"):
             rp.republished("https://www.nytimes.com/2026/09/27/a-story-with-a-long-slug.html")
